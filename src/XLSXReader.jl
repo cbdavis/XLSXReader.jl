@@ -1,6 +1,6 @@
 __precompile__()
 module XLSXReader
-using ZipFile, LightXML, DataArrays, DataFrames
+using ZipFile, LightXML, DataArrays, DataFrames, Missings
 
 immutable WorkSheet
     name::String
@@ -19,7 +19,8 @@ function get_sharedstrings(file::String)
   sidx = find(fnames .== "xl/sharedStrings.xml")
   shared = []
   if !isempty(sidx)
-      doc = readstring(xlfile.files[sidx[1]])
+      shared_strings_file = "xl/sharedStrings.xml"
+      doc = readstring(`unzip -p  $file $shared_strings_file`)
       xdoc = parse_string(doc)
       xroot = root(xdoc)  # an instance of XMLElement
       shared = []
@@ -44,7 +45,7 @@ function xlsx_parsexml(xslxfile::String, xmlfile::String)
   xlfile = ZipFile.Reader(xslxfile);
   fnames = [x.name for x in xlfile.files]
   wb_idx = find(fnames .== xmlfile)
-  xml = readstring(xlfile.files[wb_idx[1]])
+  xml = readstring(`unzip -p  $xslxfile $xmlfile`)
   close(xlfile)
   return parse_string(xml)
 end
@@ -219,7 +220,9 @@ function wsarray2df(wsarray, header::Bool = true)
     if header
         colstr = wsarray[1,:]
         colstr[Bool.(ismissing.(colstr))] = ["x"] .* string.(1:sum(ismissing.(colstr)))
-        colnames = make_colname.(colstr)
+        # if there are NA columns, colstr is of type DataArray:NAtype and not String as expected
+        colnames = make_colname.(string.(colstr))
+        #colnames = make_colname.(colstr)
     else
         colnames = Symbol.(["x"] .* string.(1:ncols))
     end
